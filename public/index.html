@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Call App - Node.js</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            width: 95%;
+            max-width: 1200px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+
+        .status {
+            padding: 8px 16px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            display: inline-block;
+            font-size: 14px;
+        }
+
+        .join-section {
+            padding: 20px;
+            text-align: center;
+            background: #f8f9fa;
+            border-bottom: 2px solid #eee;
+        }
+
+        .join-form {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .join-form input {
+            padding: 12px 15px;
+            border: 2px solid #ddd;
+            border-radius: 25px;
+            font-size: 14px;
+            outline: none;
+            min-width: 200px;
+        }
+
+        .join-form input:focus {
+            border-color: #4CAF50;
+        }
+
+        .main-content {
+            display: flex;
+            height: 600px;
+        }
+
+        .video-section {
+            flex: 2;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .video-container {
+            position: relative;
+            flex: 1;
+            background: #000;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+
+        .video-container video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .video-label {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            z-index: 10;
+        }
+
+        .local-video {
+            position: absolute;
+            bottom: 15px;
+            right: 15px;
+            width: 150px;
+            height: 100px;
+            border-radius: 10px;
+            border: 3px solid white;
+            z-index: 10;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 15px;
+        }
+
+        .control-btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            min-width: 120px;
+        }
+
+        .control-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .control-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .start-btn {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .end-btn {
+            background: #f44336;
+            color: white;
+        }
+
+        .mute-btn {
+            background: #ff9800;
+            color: white;
+        }
+
+        .chat-section {
+            flex: 1;
+            border-left: 2px solid #eee;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            padding: 20px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #eee;
+        }
+
+        .chat-header h3 {
+            color: #333;
+            font-size: 18px;
+        }
+
+        .user-count {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            background: #fafafa;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            padding: 10px 15px;
+            border-radius: 15px;
+            max-width: 80%;
+            word-wrap: break-word;
+            animation: messageSlide 0.3s ease;
+        }
+
+        @keyframes messageSlide {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.own {
+            background: #4CAF50;
+            color: white;
+            margin-left: auto;
+            text-align: right;
+        }
+
+        .message.other {
+            background: white;
+            color: #333;
+            border: 1px solid #ddd;
+        }
+
+        .message.system {
+            background: #e3f2fd;
+            color: #1976d2;
+            text-align: center;
+            margin: 10px auto;
+            border: 1px solid #bbdefb;
+        }
+
+        .message-info {
+            font-size: 11px;
+            opacity: 0.7;
+            margin-top: 5px;
+        }
+
+        .chat-input {
+            padding: 15px;
+            border-top: 2px solid #eee;
+            background: white;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 2px solid #ddd;
+            border-radius: 25px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.3s ease;
+        }
+
+        .chat-input input:focus {
+            border-color: #4CAF50;
+        }
+
+        .send-btn {
+            padding: 12px 20px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .send-btn:hover:not(:disabled) {
+            background: #45a049;
+            transform: translateY(-1px);
+        }
+
+        .send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .connection-info {
+            padding: 15px;
+            background: rgba(255, 193, 7, 0.1);
+            border-left: 4px solid #ffc107;
+            margin: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #856404;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                flex-direction: column;
+                height: auto;
+            }
+            
+            .chat-section {
+                border-left: none;
+                border-top: 2px solid #eee;
+                height: 300px;
+            }
+            
+            .local-video {
+                width: 100px;
+                height: 75px;
+            }
+            
+            .join-form {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎥 Video Call App - Node.js</h1>
+            <div class="status" id="status">Siap untuk memulai...</div>
+        </div>
+
+        <div class="join-section" id="joinSection">
+            <div class="connection-info">
+                <strong>📋 Cara Menggunakan:</strong><br>
+                1. Masukkan nama dan Room ID<br>
+                2. Klik "Buat Room" untuk membuat room baru atau "Gabung Room" untuk bergabung<br>
+                3. Bagikan Room ID kepada teman untuk bergabung<br>
+                4. Mulai video call dan chat!
+            </div>
+            
+            <div class="join-form">
+                <input type="text" id="usernameInput" placeholder="Masukkan nama Anda" required>
+                <input type="text" id="roomIdInput" placeholder="Room ID (kosongkan untuk buat baru)">
+                <button class="control-btn start-btn" id="createRoomBtn">Buat Room</button>
+                <button class="control-btn start-btn" id="joinRoomBtn">Gabung Room</button>
+            </div>
+        </div>
+
+        <div class="main-content hidden" id="mainContent">
+            <div class="video-section">
+                <div class="video-container">
+                    <div class="video-label">Video Remote</div>
+                    <video id="remoteVideo" autoplay playsinline></video>
+                    <video id="localVideo" class="local-video" autoplay playsinline muted></video>
+                </div>
+
+                <div class="controls">
+                    <button class="control-btn end-btn" id="leaveBtn">Keluar Room</button>
+                    <button class="control-btn mute-btn" id="muteBtn">Mute Audio</button>
+                    <button class="control-btn mute-btn" id="videoBtn">Matikan Video</button>
+                </div>
+            </div>
+
+            <div class="chat-section">
+                <div class="chat-header">
+                    <h3>💬 Chat</h3>
+                    <div class="user-count" id="userCount">0 pengguna online</div>
+                </div>
+                
+                <div class="chat-messages" id="chatMessages"></div>
+
+                <div class="chat-input">
+                    <div class="input-group">
+                        <input type="text" id="messageInput" placeholder="Ketik pesan..." disabled>
+                        <button class="send-btn" id="sendBtn" disabled>Kirim</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class VideoCallApp {
+            constructor() {
+                this.socket = io();
+                this.localStream = null;
+                this.remoteStream = null;
+                this.peerConnection = null;
+                this.roomId = null;
+                this.username = null;
+                this.isMuted = false;
+                this.isVideoOff = false;
+                this.isConnected = false;
+                
+                this.initializeElements();
+                this.setupEventListeners();
+                this.setupSocketListeners();
+            }
+
+            initializeElements() {
+                // Join section elements
+                this.joinSection = document.getElementById('joinSection');
+                this.mainContent = document.getElementById('mainContent');
+                this.usernameInput = document.getElementById('usernameInput');
+                this.roomIdInput = document.getElementById('roomIdInput');
+                this.createRoomBtn = document.getElementById('createRoomBtn');
+                this.joinRoomBtn = document.getElementById('joinRoomBtn');
+                
+                // Video elements
+                this.localVideo = document.getElementById('localVideo');
+                this.remoteVideo = document.getElementById('remoteVideo');
+                this.leaveBtn = document.getElementById('leaveBtn');
+                this.muteBtn = document.getElementById('muteBtn');
+                this.videoBtn = document.getElementById('videoBtn');
+                
+                // Chat elements
+                this.messageInput = document.getElementById('messageInput');
+                this.sendBtn = document.getElementById('sendBtn');
+                this.chatMessages = document.getElementById('chatMessages');
+                this.userCount = document.getElementById('userCount');
+                this.status = document.getElementById('status');
+            }
+
+            setupEventListeners() {
+                this.createRoomBtn.addEventListener('click', () => this.createRoom());
+                this.joinRoomBtn.addEventListener('click', () => this.joinRoom());
+                this.leaveBtn.addEventListener('click', () => this.leaveRoom());
+                this.muteBtn.addEventListener('click', () => this.toggleMute());
+                this.videoBtn.addEventListener('click', () => this.toggleVideo());
+                this.sendBtn.addEventListener('click', () => this.sendMessage());
+                
+                this.messageInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.sendMessage();
+                    }
+                });
+
+                // Generate random room ID when create room is clicked
+                this.createRoomBtn.addEventListener('click', () => {
+                    if (!this.roomIdInput.value.trim()) {
+                        this.roomIdInput.value = 'room-' + Math.random().toString(36).substr(2, 9);
+                    }
+                });
+            }
+
+            setupSocketListeners() {
+                this.socket.on('joined-room', (data) => {
+                    this.roomId = data.roomId;
+                    this.showMainContent();
+                    this.updateStatus(`Terhubung ke room: ${this.roomId}`);
+                    this.updateUserCount(data.userCount);
+                    this.addSystemMessage(`Anda bergabung ke room ${this.roomId}`);
+                });
+
+                this.socket.on('user-joined', (data) => {
+                    this.updateUserCount(data.userCount);
+                    this.addSystemMessage(`${data.username} bergabung ke room`);
+                });
+
+                this.socket.on('user-left', (data) => {
+                    this.updateUserCount(data.userCount);
+                    this.addSystemMessage(`${data.username} meninggalkan room`);
+                    this.handleUserLeft();
+                });
+
+                this.socket.on('ready-to-call', async () => {
+                    await this.initializeMedia();
+                    this.addSystemMessage('Siap untuk video call! Memulai koneksi...');
+                });
+
+                this.socket.on('room-full', () => {
+                    alert('Room penuh! Maksimal 2 pengguna per room.');
+                });
+
+                // WebRTC signaling
+                this.socket.on('offer', async (data) => {
+                    await this.handleOffer(data.offer);
+                });
+
+                this.socket.on('answer', async (data) => {
+                    await this.handleAnswer(data.answer);
+                });
+
+                this.socket.on('ice-candidate', async (data) => {
+                    await this.handleIceCandidate(data.candidate);
+                });
+
+                // Chat messages
+                this.socket.on('chat-message', (data) => {
+                    this.displayMessage({
+                        text: data.message,
+                        username: data.username,
+                        timestamp: data.timestamp
+                    }, false);
+                });
+
+                this.socket.on('disconnect', () => {
+                    this.updateStatus('Terputus dari server');
+                    this.addSystemMessage('Koneksi terputus dari server');
+                });
+            }
+
+            async createRoom() {
+                const username = this.usernameInput.value.trim();
+                if (!username) {
+                    alert('Masukkan nama Anda!');
+                    return;
+                }
+
+                const roomId = this.roomIdInput.value.trim() || 'room-' + Math.random().toString(36).substr(2, 9);
+                this.username = username;
+                
+                this.socket.emit('join-room', { roomId, username });
+            }
+
+            async joinRoom() {
+                const username = this.usernameInput.value.trim();
+                const roomId = this.roomIdInput.value.trim();
+                
+                if (!username || !roomId) {
+                    alert('Masukkan nama dan Room ID!');
+                    return;
+                }
+
+                this.username = username;
+                this.socket.emit('join-room', { roomId, username });
+            }
+
+            showMainContent() {
+                this.joinSection.classList.add('hidden');
+                this.mainContent.classList.remove('hidden');
+                this.messageInput.disabled = false;
+                this.sendBtn.disabled = false;
+            }
+
+            async initializeMedia() {
+                try {
+                    this.localStream = await navigator.mediaDevices.getUserMedia({
+                        video: true,
+                        audio: true
+                    });
+                    
+                    this.localVideo.srcObject = this.localStream;
+                    this.setupPeerConnection();
+                    
+                    // Create offer if this is the second user
+                    const offer = await this.peerConnection.createOffer();
+                    await this.peerConnection.setLocalDescription(offer);
+                    
+                    this.socket.emit('offer', {
+                        offer: offer,
+                        roomId: this.roomId
+                    });
+                    
+                } catch (error) {
+                    console.error('Error accessing media:', error);
+                    this.addSystemMessage('Error: Tidak dapat mengakses kamera/mikrofon');
+                }
+            }
+
+            setupPeerConnection() {
+                const configuration = {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                };
+
+                this.peerConnection = new RTCPeerConnection(configuration);
+
+                // Add local stream tracks
+                if (this.localStream) {
+                    this.localStream.getTracks().forEach(track => {
+                        this.peerConnection.addTrack(track, this.localStream);
+                    });
+                }
+
+                // Handle remote stream
+                this.peerConnection.ontrack = (event) => {
+                    this.remoteStream = event.streams[0];
+                    this.remoteVideo.srcObject = this.remoteStream;
+                    this.updateStatus('🟢 Video call aktif');
+                    this.isConnected = true;
+                    this.addSystemMessage('Video call terhubung!');
+                };
+
+                // Handle ICE candidates
+                this.peerConnection.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        this.socket.emit('ice-candidate', {
+                            candidate: event.candidate,
+                            roomId: this.roomId
+                        });
+                    }
+                };
+            }
+
+            async handleOffer(offer) {
+                if (!this.peerConnection) {
+                    await this.initializeMedia();
+                }
+
+                await this.peerConnection.setRemoteDescription(offer);
+                const answer = await this.peerConnection.createAnswer();
+                await this.peerConnection.setLocalDescription(answer);
+
+                this.socket.emit('answer', {
+                    answer: answer,
+                    roomId: this.roomId
+                });
+            }
+
+            async handleAnswer(answer) {
+                await this.peerConnection.setRemoteDescription(answer);
+            }
+
+            async handleIceCandidate(candidate) {
+                if (this.peerConnection) {
+                    await this.peerConnection.addIceCandidate(candidate);
+                }
+            }
+
+            handleUserLeft() {
+                if (this.remoteVideo.srcObject) {
+                    this.remoteVideo.srcObject = null;
+                }
+                this.isConnected = false;
+                this.updateStatus('Menunggu user lain...');
+            }
+
+            sendMessage() {
+                const message = this.messageInput.value.trim();
+                if (!message) return;
+
+                this.socket.emit('chat-message', { message });
+                
+                this.displayMessage({
+                    text: message,
+                    username: this.username,
+                    timestamp: new Date().toLocaleTimeString()
+                }, true);
+                
+                this.messageInput.value = '';
+            }
+
+            displayMessage(messageData, isOwn) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${isOwn ? 'own' : 'other'}`;
+                
+                messageDiv.innerHTML = `
+                    <div>${messageData.text}</div>
+                    <div class="message-info">${messageData.username} - ${messageData.timestamp}</div>
+                `;
+
+                this.chatMessages.appendChild(messageDiv);
+                this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+            }
+
+            addSystemMessage(text) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message system';
+                messageDiv.innerHTML = `
+                    <div>${text}</div>
+                    <div class="message-info">System</div>
+                `;
+                this.chatMessages.appendChild(messageDiv);
+                this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+            }
+
+            toggleMute() {
+                if (this.localStream) {
+                    const audioTrack = this.localStream.getAudioTracks()[0];
+                    if (audioTrack) {
+                        audioTrack.enabled = !audioTrack.enabled;
+                        this.isMuted = !audioTrack.enabled;
+                        this.muteBtn.textContent = this.isMuted ? 'Unmute Audio' : 'Mute Audio';
+                        this.muteBtn.style.background = this.isMuted ? '#f44336' : '#ff9800';
+                    }
+                }
+            }
+
+            toggleVideo() {
+                if (this.localStream) {
+                    const videoTrack = this.localStream.getVideoTracks()[0];
+                    if (videoTrack) {
+                        videoTrack.enabled = !videoTrack.enabled;
+                        this.isVideoOff = !videoTrack.enabled;
+                        this.videoBtn.textContent = this.isVideoOff ? 'Nyalakan Video' : 'Matikan Video';
+                        this.videoBtn.style.background = this.isVideoOff ? '#f44336' : '#ff9800';
+                    }
+                }
+            }
+
+            leaveRoom() {
+                this.socket.emit('leave-room');
+                
+                if (this.localStream) {
+                    this.localStream.getTracks().forEach(track => track.stop());
+                }
+                
+                if (this.peerConnection) {
+                    this.peerConnection.close();
+                }
+
+                this.localVideo.srcObject = null;
+                this.remoteVideo.srcObject = null;
+                
+                this.joinSection.classList.remove('hidden');
+                this.mainContent.classList.add('hidden');
+                
+                this.roomId = null;
+                this.username = null;
+                this.isConnected = false;
+                this.updateStatus('Siap untuk memulai...');
+                
+                // Clear chat
+                this.chatMessages.innerHTML = '';
+            }
+
+            updateStatus(message) {
+                this.status.textContent = message;
+            }
+
+            updateUserCount(count) {
+                this.userCount.textContent = `${count} pengguna online`;
+            }
+        }
+
+        // Initialize app when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new VideoCallApp();
+        });
+    </script>
+</body>
+</html>
